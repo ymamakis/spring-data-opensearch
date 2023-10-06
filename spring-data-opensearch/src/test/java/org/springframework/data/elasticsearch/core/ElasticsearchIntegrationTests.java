@@ -29,6 +29,8 @@ import java.lang.Double;
 import java.lang.Integer;
 import java.lang.Long;
 import java.lang.Object;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1364,12 +1366,51 @@ public abstract class ElasticsearchIntegrationTests {
 		assertThat(count).isEqualTo(10);
 	}
 
+	@Test
+	void shouldAcceptPointInTime(){
+		// given
+		List<IndexQuery> entities = createSampleEntitiesWithMessage("Test message", 30);
+		// when
+		operations.bulkIndex(entities, IndexCoordinates.of(indexNameProvider.indexName()));
+		String pointInTime = operations.openPointInTime(IndexCoordinates.of(indexNameProvider.indexName()),
+				Duration.of(100, ChronoUnit.SECONDS), false);
+		assertThat(pointInTime).isNotNull();
+		Query searchQuery = getBuilderWithMatchAllQuery().withPageable(Pageable.ofSize( 10)).withPointInTime(
+				new Query.PointInTime(pointInTime,
+						Duration.of(100, ChronoUnit.SECONDS))
+		)
+				.withSort(Sort.by(Sort.Direction.ASC,"keywordId"))
+				.build();
+		SearchHits<SampleEntity> searchHits = operations.search(searchQuery, SampleEntity.class,
+				IndexCoordinates.of(indexNameProvider.indexName()));
+		List<SearchHit<SampleEntity>> sampleEntities = new ArrayList<>();
+		int calls = 1;
+		while (searchHits.hasSearchHits()) {
+			sampleEntities.addAll(searchHits.getSearchHits());
+			String searchAfter = searchHits.getSearchHit(searchHits.getSearchHits().size()-1).getContent().getId();
+			searchQuery = getBuilderWithMatchAllQuery().withPageable(Pageable.ofSize( 10))
+					.withPointInTime(
+					new Query.PointInTime(pointInTime,
+							Duration.of(100, ChronoUnit.SECONDS))
+			).withSearchAfter(List.of(searchAfter))
+					.withSort(Sort.by(Sort.Direction.ASC,"keywordId"))
+					.build();
+			searchHits = operations.search(searchQuery, SampleEntity.class,
+					IndexCoordinates.of(indexNameProvider.indexName()));
+			calls++;
+		}
+		assertThat(operations.closePointInTime(pointInTime)).isTrue();
+		assertThat(sampleEntities).hasSize(30);
+		assertThat(calls).isEqualTo(4);
+	}
+
 	private static List<IndexQuery> createSampleEntitiesWithMessage(String message, int numberOfEntities) {
 		List<IndexQuery> indexQueries = new ArrayList<>();
 		for (int i = 0; i < numberOfEntities; i++) {
 			String documentId = UUID.randomUUID().toString();
 			SampleEntity sampleEntity = new SampleEntity();
 			sampleEntity.setId(documentId);
+			sampleEntity.setKeywordId(documentId);
 			sampleEntity.setMessage(message);
 			sampleEntity.setRate(2);
 			sampleEntity.setVersion(System.currentTimeMillis());
@@ -3548,6 +3589,8 @@ public abstract class ElasticsearchIntegrationTests {
 		@Nullable
 		@Id private String id;
 		@Nullable
+		@Field(type = Keyword, store = true) private String keywordId;
+		@Nullable
 		@Field(type = Text, store = true, fielddata = true) private String type;
 		@Nullable
 		@Field(type = Text, store = true, fielddata = true) private String message;
@@ -3605,6 +3648,7 @@ public abstract class ElasticsearchIntegrationTests {
 			public SampleEntity build() {
 				SampleEntity sampleEntity = new SampleEntity();
 				sampleEntity.setId(id);
+				sampleEntity.setKeywordId(id);
 				sampleEntity.setType(type);
 				sampleEntity.setMessage(message);
 				sampleEntity.setRate(rate);
@@ -3623,6 +3667,15 @@ public abstract class ElasticsearchIntegrationTests {
 
 		public void setId(@Nullable String id) {
 			this.id = id;
+		}
+
+		@Nullable
+		public String getKeywordId() {
+			return keywordId;
+		}
+
+		public void setKeywordId(@Nullable String keywordId) {
+			this.keywordId = keywordId;
 		}
 
 		@Nullable

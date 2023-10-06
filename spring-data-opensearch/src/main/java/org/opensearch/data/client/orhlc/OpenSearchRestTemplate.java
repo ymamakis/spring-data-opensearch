@@ -10,6 +10,7 @@
 package org.opensearch.data.client.orhlc;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -31,12 +32,7 @@ import org.opensearch.action.get.MultiGetRequest;
 import org.opensearch.action.get.MultiGetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.search.ClearScrollRequest;
-import org.opensearch.action.search.MultiSearchRequest;
-import org.opensearch.action.search.MultiSearchResponse;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.search.SearchScrollRequest;
+import org.opensearch.action.search.*;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.RequestOptions;
@@ -47,6 +43,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.index.reindex.UpdateByQueryRequest;
+import org.opensearch.search.builder.PointInTimeBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.suggest.SuggestBuilder;
 import org.springframework.data.elasticsearch.BulkFailureException;
@@ -434,6 +431,19 @@ public class OpenSearchRestTemplate extends AbstractElasticsearchTemplate {
             LOGGER.warn(String.format("Could not clear scroll: %s", e.getMessage()));
         }
     }
+
+    @Override
+    public String openPointInTime(IndexCoordinates index, Duration keepAlive, Boolean ignoreUnavailable) {
+        CreatePitRequest createPitRequest = new CreatePitRequest(TimeValue.timeValueSeconds(keepAlive.toSeconds()),true,index.getIndexNames());
+        return execute(client->client.createPit(createPitRequest,RequestOptions.DEFAULT)).getId();
+    }
+
+    @Override
+    public Boolean closePointInTime(String pit) {
+        DeletePitRequest deletePitRequest = new DeletePitRequest(pit);
+        return !execute(client-> client.deletePit(deletePitRequest,RequestOptions.DEFAULT)).getDeletePitResults().isEmpty();
+    }
+
 
     public SearchResponse suggest(SuggestBuilder suggestion, IndexCoordinates index) {
         SearchRequest searchRequest = requestFactory.searchRequest(suggestion, index);
