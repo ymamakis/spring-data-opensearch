@@ -3754,6 +3754,8 @@ public abstract class ElasticsearchIntegrationTests {
 				return false;
 			if (!Objects.equals(id, that.id))
 				return false;
+			if (!Objects.equals(keywordId, that.keywordId))
+				return false;
 			if (!Objects.equals(type, that.type))
 				return false;
 			if (!Objects.equals(message, that.message))
@@ -3769,6 +3771,7 @@ public abstract class ElasticsearchIntegrationTests {
 		public int hashCode() {
 			int result = id != null ? id.hashCode() : 0;
 			result = 31 * result + (type != null ? type.hashCode() : 0);
+			result = 31 * result + (keywordId != null ? keywordId.hashCode() : 0);
 			result = 31 * result + (message != null ? message.hashCode() : 0);
 			result = 31 * result + rate;
 			result = 31 * result + (scriptedRate != null ? scriptedRate.hashCode() : 0);
